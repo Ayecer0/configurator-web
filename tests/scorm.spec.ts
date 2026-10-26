@@ -254,6 +254,14 @@ test.describe("учёт заданий", () => {
 });
 
 test.describe("автономный режим", () => {
+  test("в галерее вне LMS панели заданий нет: курса ещё нет", async ({
+    page,
+  }) => {
+    await page.goto("/index.html");
+    await expect(page.locator(".catalog")).toBeVisible();
+    await expect(page.locator(".course-panel")).toHaveCount(0);
+  });
+
   test("вне LMS прогресс живёт в localStorage", async ({ page }) => {
     await page.goto(`/index.html?lesson=${LESSON}`);
     await expect(page.locator(".lesson")).toBeVisible();

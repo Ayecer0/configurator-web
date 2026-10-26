@@ -2,7 +2,10 @@
      собирает трекер. Приложение целиком живёт в документе страницы,
      без собственного iframe. -->
 <template>
-  <div class="app" :class="`app--${view}`">
+  <div
+    class="app"
+    :class="[`app--${view}`, { 'app--no-panel': !panelVisible }]"
+  >
     <p v-if="loadError" class="app__message">{{ loadError }}</p>
     <p v-else-if="!tracker" class="app__message">Загрузка каталога моделей…</p>
     <template v-else>
@@ -22,9 +25,11 @@
       <!--
         Лёгкий вьюер вставляется в чужой курс «как картинка»: без шапки
         урока и без панели заданий — там их не видно и не за чем.
+        В галерее вне LMS панель тоже не нужна: заданий курса ещё нет,
+        а колонка съедает место у карточек.
       -->
       <CourseProgressPanel
-        v-if="!viewer"
+        v-if="panelVisible"
         :class="{ 'course-panel--inline': view === 'catalog' }"
         :tracker="tracker"
         :runtime-label="runtime.label"
@@ -97,6 +102,18 @@ const linksEnabled = computed(() => props.runtime.kind !== "scorm");
 /** Лёгкий вьюер для вставки в сторонний курс (embed-<id>.html). */
 const viewer = embedMode() === "viewer";
 
+/**
+ * Панель заданий — про задания курса. Во вьюере её нет по определению,
+ * а в галерее вне LMS показывать нечего: курса ещё нет. В уроке панель
+ * остаётся всегда — там видно прогресс, ради которого режим и нужен.
+ *
+ * Внутри SCORM панель есть и в каталоге: каталог — отдельный SCO, который
+ * показывает общий прогресс курса.
+ */
+const panelVisible = computed(
+  () => !viewer && (props.runtime.kind === "scorm" || view.value === "lesson"),
+);
+
 /** Все уроки каталога (модели с 3D). */
 const lessons = computed(() => lessonsOf(models.value));
 
@@ -118,9 +135,9 @@ onMounted(async () => {
   }
 });
 
-// Переходы «каталог ↔ урок» не перезагружают страницу: перезагрузка SCO
-// означала бы второй Initialize в одной сессии LMS.
 onBeforeUnmount(
+  // Переходы «каталог ↔ урок» не перезагружают страницу: перезагрузка SCO
+  // означала бы второй Initialize в одной сессии LMS.
   onRouteChange(() => {
     lessonId.value = currentLessonId();
   }),
@@ -168,6 +185,11 @@ body {
   grid-template-columns: minmax(0, 1fr) 332px;
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
+}
+
+.app--catalog.app--no-panel {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .app--catalog > .catalog {
