@@ -25,18 +25,24 @@
         <input
           type="range"
           class="progress-bar"
-          :value="progress"
+          :value="displayTime"
+          @pointerdown="beginScrub"
+          @pointerup="endScrub"
+          @pointercancel="endScrub"
+          @blur="endScrub"
           @input="onProgressChange"
           min="0"
-          max="100"
-          step="0.1"
+          :max="duration"
+          step="0.01"
+          :disabled="duration <= 0"
           aria-label="Прогресс анимации"
-          :aria-valuenow="progress"
+          :aria-valuenow="displayTime"
           :aria-valuemin="0"
-          :aria-valuemax="100"
+          :aria-valuemax="duration"
+          :aria-valuetext="formatTime(displayTime)"
         />
         <div class="time-display">
-          <span>{{ formatTime(currentTime) }}</span>
+          <span>{{ formatTime(displayTime) }}</span>
           <span>{{ formatTime(duration) }}</span>
         </div>
       </div>
@@ -70,6 +76,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { clampAnimationTime } from '../animation/playback';
 
 // Интерфейс входных параметров компонента
 interface Props {
@@ -104,11 +111,24 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>();
 
-// Вычисляемый прогресс анимации в процентах (0-100)
-const progress = computed(() => {
-  if (props.duration === 0) return 0;
-  return (props.currentTime / props.duration) * 100;
-});
+// Preserve the user's thumb position during drag. Frame updates must not
+// fight pointer input while scrubbing through the timeline.
+const isScrubbing = ref(false);
+const scrubTime = ref(0);
+const displayTime = computed(() =>
+  isScrubbing.value
+    ? scrubTime.value
+    : clampAnimationTime(props.currentTime, props.duration),
+);
+
+function beginScrub() {
+  isScrubbing.value = true;
+  scrubTime.value = clampAnimationTime(props.currentTime, props.duration);
+}
+
+function endScrub() {
+  isScrubbing.value = false;
+}
 
 // Локальное состояние для скорости и повтора
 const playbackSpeed = ref(props.playbackSpeed);
@@ -143,8 +163,8 @@ const togglePlayPause = () => {
 // Обработка изменения позиции на полосе прокрутки
 const onProgressChange = (event: Event) => {
   const target = event.target as HTMLInputElement;
-  const newProgress = parseFloat(target.value);
-  const newTime = (newProgress / 100) * props.duration;
+  const newTime = clampAnimationTime(Number(target.value), props.duration);
+  scrubTime.value = newTime;
   emit('seek', newTime);
 };
 
@@ -160,11 +180,13 @@ const onLoopChange = () => {
   emit('update:loop', loop.value);
 };
 
-// Форматирование времени в формат MM:SS
+// Short clips show tenths of a second instead of 0:00 for their entire run.
 const formatTime = (seconds: number): string => {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const safe = clampAnimationTime(seconds, props.duration);
+  const mins = Math.floor(safe / 60);
+  const secs = Math.floor(safe % 60);
+  const tenths = props.duration < 10 ? `.${Math.floor((safe % 1) * 10)}` : '';
+  return `${mins}:${secs.toString().padStart(2, '0')}${tenths}`;
 };
 </script>
 
@@ -237,6 +259,11 @@ const formatTime = (seconds: number): string => {
   appearance: none;
   background: #e0e0e0;
   cursor: pointer;
+}
+
+.progress-bar:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .progress-bar::-webkit-slider-thumb {
