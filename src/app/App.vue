@@ -15,6 +15,7 @@
         :model="model"
         :tracker="tracker"
         :viewer="viewer"
+        :back-to-catalog="backToCatalog"
       />
       <CatalogPage
         v-else
@@ -113,6 +114,13 @@ const viewer = embedMode() === "viewer";
 const panelVisible = computed(
   () => !viewer && (props.runtime.kind === "scorm" || view.value === "lesson"),
 );
+
+/**
+ * Кнопка «К каталогу» в уроке — только вне LMS. Внутри SCO смена
+ * документа дала бы второй Initialize, а в embed-уроке увела бы из
+ * чужого курса; там навигация — меню курса.
+ */
+const backToCatalog = computed(() => props.runtime.kind === "local");
 
 /** Все уроки каталога (модели с 3D). */
 const lessons = computed(() => lessonsOf(models.value));
